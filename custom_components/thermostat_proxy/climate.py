@@ -2254,6 +2254,14 @@ class CustomThermostatEntity(RestoreEntity, ClimateEntity):
         is_available = self._real_state.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN)
         self._mark_entity_health(self._real_entity_id, is_available)
 
+        # Preserve last-known good limits and supported features while the
+        # real thermostat is unavailable/unknown. Its degraded (empty)
+        # attributes would otherwise drop supported_features — e.g. the
+        # TARGET_TEMPERATURE_RANGE bit — causing dual-setpoint service calls
+        # (lower/upper target temperature) to be rejected by the frontend.
+        if not is_available:
+            return
+
         self._min_temp = _coerce_temperature(
             self._real_state.attributes.get(ATTR_MIN_TEMP)
         )
