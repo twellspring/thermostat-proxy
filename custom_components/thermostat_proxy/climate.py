@@ -552,45 +552,52 @@ class CustomThermostatEntity(RestoreEntity, ClimateEntity):
                 HVACMode.COOL,
                 HVACMode.HEAT,
             ):
-                if new_mode_str == HVACMode.COOL:
-                    if self._virtual_target_temperature_high is not None:
+                # dual -> single: carry over the matching virtual setpoint
+                preferred = (
+                    self._virtual_target_temperature_high
+                    if new_mode_str == HVACMode.COOL
+                    else self._virtual_target_temperature_low
+                )
+                if preferred is not None:
+                    self._virtual_target_temperature = (
+                        self._apply_target_constraints(preferred)
+                    )
+                else:
+                    rt = self._get_real_target_temperature()
+                    if rt is not None:
                         self._virtual_target_temperature = (
-                            self._virtual_target_temperature_high
+                            self._apply_target_constraints(rt)
                         )
-                    else:
-                        rt = self._get_real_target_temperature()
-                        if rt is not None:
-                            self._virtual_target_temperature = (
-                                self._apply_target_constraints(rt)
-                            )
-                elif new_mode_str == HVACMode.HEAT:
-                    if self._virtual_target_temperature_low is not None:
-                        self._virtual_target_temperature = (
-                            self._virtual_target_temperature_low
-                        )
-                    else:
-                        rt = self._get_real_target_temperature()
-                        if rt is not None:
-                            self._virtual_target_temperature = (
-                                self._apply_target_constraints(rt)
-                            )
-            elif old_mode_str in (HVACMode.COOL, HVACMode.HEAT) and new_mode_str in (
-                HVACMode.HEAT_COOL,
-                HVACMode.AUTO,
-            ):
+            elif new_mode_str in (HVACMode.HEAT_COOL, HVACMode.AUTO):
+                # entering range mode: carry single setpoint over, then seed any
+                # missing dual slot from the real thermostat (covers OFF/unknown)
                 if (
                     old_mode_str == HVACMode.COOL
                     and self._virtual_target_temperature is not None
                 ):
                     self._virtual_target_temperature_high = (
-                        self._virtual_target_temperature
+                        self._apply_target_constraints(
+                            self._virtual_target_temperature
+                        )
                     )
                 elif (
                     old_mode_str == HVACMode.HEAT
                     and self._virtual_target_temperature is not None
                 ):
                     self._virtual_target_temperature_low = (
-                        self._virtual_target_temperature
+                        self._apply_target_constraints(
+                            self._virtual_target_temperature
+                        )
+                    )
+                real_low = self._get_real_target_temperature_low()
+                if self._virtual_target_temperature_low is None and real_low is not None:
+                    self._virtual_target_temperature_low = (
+                        self._apply_target_constraints(real_low)
+                    )
+                real_high = self._get_real_target_temperature_high()
+                if self._virtual_target_temperature_high is None and real_high is not None:
+                    self._virtual_target_temperature_high = (
+                        self._apply_target_constraints(real_high)
                     )
 
         self._temperature_unit = self._discover_temperature_unit()
